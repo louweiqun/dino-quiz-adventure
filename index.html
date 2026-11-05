@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>恐龙答题大冒险 · 答题闯关 RPG</title>
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<div id="app">
+  <div id="viewport">
+    <canvas id="glcanvas"></canvas>
+    <div id="world"></div>
+    <div id="shadow"></div>
+    <div id="player"><img src="assets/dinos/hero.png" alt="主角恐龙"></div>
+    <div id="arrow" class="hidden">➤</div>
+    <div id="compass">下一战：<b id="c-name">—</b> <span id="c-dist"></span></div>
+    <div id="stick" class="hidden"><i id="stickKnob"></i><b>走路</b></div>
+  </div>
+
+  <!-- 第一人称下特效要落在 3D 目标上，这两个隐形锚点由 fp.js 每帧投影定位 -->
+  <div id="aFoe"></div>
+  <div id="aMe"></div>
+
+  <div id="hud">
+    <div class="hud-item">
+      <span>🦕</span>
+      <div class="bar" id="hpbar"><i style="width:100%"></i><b id="hptext">1000 / 1000</b></div>
+    </div>
+    <div class="hud-item">形态 <img id="formFace" alt=""><b id="formName">小恐龙</b></div>
+    <div class="hud-item">已击败 <span id="stage">0 / 50</span></div>
+    <div class="hud-item">上限 <span id="cap">1000</span></div>
+    <div class="hud-item">地区 <span id="region">青草平原</span></div>
+    <div class="hud-item">答对 <span id="statRight">0</span> / 答错 <span id="statWrong">0</span></div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnSubjects">📚 科目 <span id="subjCount">5</span></button>
+    <button class="btn" id="btnWrong">📕 错题库 <span id="wCount">0</span></button>
+    <button class="btn on" id="btnVoice">🎙 语音</button>
+    <button class="btn on" id="btnSfx">🔊 音效</button>
+    <button class="btn on" id="btnFx" title="对决动画：VS 开场、扑击、爆裂、飘字">✨ 特效</button>
+    <button class="btn on" id="btnView" title="第一人称 3D / 俯视 2D 切换">🎥 视角</button>
+    <button class="btn" id="btnMusic">🎵 音乐</button>
+    <button class="btn" id="btnSet" title="语音音色、每题倒计时">⚙ 设置</button>
+    <button class="btn" id="btnHelp">❓ 玩法</button>
+    <button class="btn warn" id="btnReset">↺ 重开</button>
+  </div>
+
+  <div id="dpad">
+    <button class="u" data-dir="up">▲</button>
+    <button class="l" data-dir="left">◀</button>
+    <button class="mid">方向</button>
+    <button class="r" data-dir="right">▶</button>
+    <button class="d" data-dir="down">▼</button>
+  </div>
+
+  <div id="subtitle" class="hidden">
+    <div class="who" id="sub-who"></div>
+    <div class="txt" id="sub-txt"></div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="fx"></div>
+
+  <!-- 战斗界面 -->
+  <div id="battle" class="hidden">
+    <div class="panel" id="battlePanel">
+      <div class="bhead">
+        <div class="duelist" id="b-heroBox">
+          <img class="fighter" id="b-hero" src="assets/dinos/hero.png" alt="主角恐龙">
+          <div class="fname">我</div>
+        </div>
+        <div class="meta">
+          <h3 id="b-name">—<small id="b-en"></small></h3>
+          <div class="tower" id="b-tags"></div>
+          <div class="mbar">
+            <div class="lab"><span>敌人血量</span><span id="b-ehp-text"></span></div>
+            <div class="bar" id="ehpbar"><i style="width:100%"></i></div>
+          </div>
+          <div class="mbar">
+            <div class="lab"><span>我的血量</span><span id="b-php-text"></span></div>
+            <div class="bar" id="phpe"><i style="width:100%"></i></div>
+          </div>
+        </div>
+        <div class="duelist foe">
+          <img class="fighter enemy-img" id="b-img" src="" alt="敌人恐龙">
+          <div class="fname" id="b-foe-name">敌</div>
+        </div>
+        <div class="timer" id="b-timer">30</div>
+      </div>
+
+      <div class="passage hidden" id="b-passage"></div>
+      <div id="b-subject" class="tag" style="margin-top:12px"></div>
+      <div id="stem">—</div>
+      <div id="opts"></div>
+      <div id="explain"></div>
+      <div class="bfoot">
+        <span class="round" id="b-round"></span>
+        <span class="grow"></span>
+        <button class="btn" id="b-read">🔊 朗读题目</button>
+        <button class="btn" id="b-skip" title="这道题太难，换一题（不扣血，但会记录一次跳过）">🤔 换一题</button>
+        <button class="btn big hidden" id="b-next">继续 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 错题库 -->
+  <!-- 科目配置 -->
+  <div id="subjview" class="overlay hidden">
+    <div class="card">
+      <h2>📚 出题科目配置</h2>
+      <p>题库只收浙江省各地市的中考真题。勾选的科目才会进入随机出题池；某科目真题不足 20 道时用补位题兜底，敌人越强题目越难，题量不足时会自动从其他已选科目借题。</p>
+      <div class="subjgrid" id="subj-list"></div>
+      <p id="subj-summary" class="subjsum"></p>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="subj-all">全选</button>
+        <button class="btn" id="subj-none">全不选</button>
+        <button class="btn" id="subj-zk">只选浙江真题科目</button>
+        <span class="grow" style="flex:1"></span>
+        <button class="btn big" id="subj-close">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setview" class="overlay hidden">
+    <div class="card">
+      <h2>⚙ 设置</h2>
+      <div class="setrow">
+        <label for="setQTime">每题倒计时</label>
+        <select id="setQTime"></select>
+        <span class="sethint">超时不扣血，直接换一道题；选「不限时」就一直等你作答。</span>
+      </div>
+      <div class="setrow">
+        <label>台词语音</label>
+        <button class="btn" id="setVoiceOn">开启</button>
+        <span class="sethint">关掉后台词只显示字幕。</span>
+      </div>
+      <div class="setrow">
+        <label for="setVoice">朗读音色</label>
+        <select id="setVoice"></select>
+        <button class="btn" id="setTry">▶ 试听</button>
+      </div>
+      <div class="setrow">
+        <label for="setPitch">音高（越低越浑厚）</label>
+        <input type="range" id="setPitch" min="0.3" max="1.6" step="0.02">
+        <span class="setval" id="setPitchV">0.88</span>
+      </div>
+      <div class="setrow">
+        <label for="setRate">语速</label>
+        <input type="range" id="setRate" min="0.5" max="1.6" step="0.02">
+        <span class="setval" id="setRateV">0.94</span>
+      </div>
+      <p class="setdiag" id="setDiag">点「▶ 试听」，这里会显示浏览器实际回报的发声事件。</p>
+      <p class="sethint" id="setDevice"></p>
+      <p class="sethint">试听没声音时依次试：① 换一个本地音色（名字里带 Local/桌面版，别选 Online/Natural）；② 选「系统默认音色」；③ 按上面这台设备的指引把中文语音包装上，再点「🔄 重新扫描音色」；④ 检查音量合成器里这个浏览器有没有被单独静音。平板还要确认媒体音量没关——只关「音乐/视频」音量时音效和台词都听不到。</p>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="setRescan">🔄 重新扫描音色</button>
+        <span class="grow" style="flex:1"></span>
+        <button class="btn big" id="set-close">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="wrongview" class="overlay hidden">
+    <div class="card">
+      <h2>📕 错题库（<span id="w-total">0</span> 题待复习）</h2>
+      <p>答错的题会自动收录。同一道题在练习里答对一次即视为掌握并移出错题库；错题库中的题不会在战斗中重复出现。</p>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="w-practice">▶ 随机练一道错题</button>
+        <button class="btn warn" id="w-clear">🗑 清空错题库</button>
+        <span class="grow" style="flex:1"></span>
+        <button class="btn" id="w-close">关闭</button>
+      </div>
+
+      <div id="w-practice-area" class="hidden">
+        <div class="passage hidden" id="w-q-passage"></div>
+        <div class="qstem" id="w-q-stem"></div>
+        <div class="qopts" id="w-q-opts"></div>
+        <div id="w-q-explain"></div>
+      </div>
+
+      <div class="wlist" id="w-list"></div>
+    </div>
+  </div>
+
+  <!-- 开场 -->
+  <div id="startview" class="overlay">
+    <div class="card">
+      <h1>🦖 恐龙答题大冒险</h1>
+      <p>你是一只血量 <b>1000</b> 的小恐龙，要穿过五片领地，一路答对 <b>50</b> 只恐龙的题目，才能通关。</p>
+      <div class="rules">
+        <div class="rule"><b>移动</b><br><span id="rm2d">方向键 ↑↓←→ 或 W A S D（手机用左下方向键）在草地上行走。</span><span id="rm3d">第一人称：左下摇杆（或 W/S、↑/↓）前后走，Q/E 横移；手指在画面上拖动就能转头，键盘 ←/→ 转身。头顶的罗盘会标出下一只恐龙的距离，不在视线里时屏幕上方会出现指针。</span></div>
+        <div class="rule"><b>碰面</b><br>走近敌人先上演「VS」对决开场，听它用低沉男声放狠话（中文字幕 + 语音），然后开始车轮战出题。</div>
+        <div class="rule"><b>答题</b><br>答对：你扑上去爪击，敌人 −200 血；答错：敌人反扑，自己 −200 血。连对会触发连击，最后一击有终结动画。一题默认 30 秒（「⚙ 设置」里可改成 10～120 秒或不限时），超时不扣血、直接换题。</div>
+        <div class="rule"><b>奖励</b><br>击败敌人：血量上限 +50，并且当场加满血。地图上还有发光草药，采一株 +100 血。</div>
+        <div class="rule"><b>进化</b><br>打败一只恐龙，主角就吸收它的血脉、当场变成那只恐龙的样子，形态一路保留到通关，HUD 上「形态」会写着现在的名字。俯视版直接看脚下那个小人；第一人称则有一个半透明的化身站在你身前偏右，背对着你、朝前进的方向走，低头就能看见自己变成了什么。</div>
+        <div class="rule"><b>题目</b><br>以浙江各地中考真题为主，真题不足的科目用补位题兜底；敌人越强，题目越难。点「📚 科目」可自选出题科目。</div>
+        <div class="rule"><b>错题</b><br>答错的题进错题库，战斗中不再重复考；错题同一道答对一次即移出错题库。</div>
+        <div class="rule"><b>声音</b><br>听得到「嘟嘟」音效却没人在念台词？打开「⚙ 设置」→ 朗读音色换一个标着「本地」的音色或「系统默认音色」，点「▶ 试听」，下面会写出浏览器实际回报的发声事件，一眼看出是哪个环节哑了。</div>
+      </div>
+      <p style="color:#9fe0ff">50 只恐龙随意挑战，不必按顺序：每只头顶都写着「强度 · 血量 · 答对几题」，先看再挑。敌人血量从 100 递增到 1000（最强的在最后一片领地）。中途倒下可以满血复活重打这一场，进度不会丢。</p>
+      <div class="subjmini" id="start-subjects"></div>
+      <div class="row">
+        <button class="btn big" id="btnStart">🎮 开始冒险</button>
+        <button class="btn" id="btnContinue">▶ 继续上次进度</button>
+        <button class="btn" id="btnStartSubjects">📚 设置出题科目</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 战败 -->
+  <div id="deadview" class="overlay hidden">
+    <div class="card">
+      <h2>💥 你被打倒了！</h2>
+      <p id="dead-line"></p>
+      <div class="statgrid" id="dead-stats"></div>
+      <div class="row">
+        <button class="btn big" id="btnRevive">❤ 满血复活，再打这一场</button>
+        <button class="btn" id="btnDeadWrong">📕 看看我错在哪</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通关 -->
+  <div id="winview" class="overlay hidden">
+    <div class="card">
+      <h1>🏆 恭喜通关！</h1>
+      <p>50 只恐龙全部被你的答题实力打败，草地恢复了平静。</p>
+      <div class="statgrid" id="win-stats"></div>
+      <div class="row">
+        <button class="btn big" id="btnAgain">↺ 再来一周目</button>
+        <button class="btn" id="btnWinWrong">📕 复习错题库</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/questions-stem.js"></script>
+<script src="js/questions-lang.js"></script>
+<script src="js/questions-zk.js"></script>
+<script src="js/questions-fill.js"></script>
+<script src="js/questions.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/walk-sfx.js"></script>
+<script src="vendor/three.min.js"></script>
+<script src="js/fp.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
